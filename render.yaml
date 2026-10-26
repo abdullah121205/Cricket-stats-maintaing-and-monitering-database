@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: cricket-stats-db
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DB_TYPE
+        value: sqlite
+      - key: DEBUG
+        value: "False"

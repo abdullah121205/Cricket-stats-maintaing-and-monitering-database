@@ -20,4 +20,4 @@ class Config:
     
     # Server Configuration
     PORT = int(os.getenv("PORT", 5000))
-    DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "t")
+    DEBUG = os.getenv("DEBUG", "False" if os.getenv("RENDER") else "True").lower() in ("true", "1", "t")
