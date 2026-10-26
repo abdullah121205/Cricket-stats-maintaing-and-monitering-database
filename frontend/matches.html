@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Management & Scorecards - Cricket Stats DB</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+        <div class="container-fluid max-w-7xl">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                <i class="fas fa-baseball-bat-ball text-emerald fs-4"></i>
+                <span>Cric</span>Stats DB
+            </a>
+            <button class="navbar-toggler text-white border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navMenu">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 gap-1">
+                    <li class="nav-item"><a class="nav-link" href="/"><i class="fas fa-gauge-high me-1"></i> Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/players"><i class="fas fa-user-group me-1"></i> Players</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/teams"><i class="fas fa-shield-halved me-1"></i> Teams</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/matches"><i class="fas fa-trophy me-1"></i> Matches</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/statistics"><i class="fas fa-chart-pie me-1"></i> Leaderboards</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-4">
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+            <div>
+                <h2 class="fw-bold mb-1 text-white">Match Management & Scorecards</h2>
+                <p class="text-muted mb-0">Record match results, monitor scorecards, and enter player batting & bowling spells.</p>
+            </div>
+            <div>
+                <button class="btn btn-emerald" data-bs-toggle="modal" data-bs-target="#scheduleMatchModal">
+                    <i class="fas fa-calendar-plus me-1"></i> Schedule New Match
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card card-dark p-3 mb-4">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Filter by Format</label>
+                    <select id="filterFormat" class="form-select">
+                        <option value="">All Formats (T20, ODI, Test)</option>
+                        <option value="T20">T20</option>
+                        <option value="ODI">ODI</option>
+                        <option value="Test">Test</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Filter by Status</label>
+                    <select id="filterStatus" class="form-select">
+                        <option value="">All Statuses</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Scheduled">Scheduled</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Matches Container -->
+        <div id="matchesContainer">
+            <div class="card card-dark p-4 text-center text-muted">Loading matches...</div>
+        </div>
+
+    </main>
+
+    <!-- Modal: Schedule Match -->
+    <div class="modal fade" id="scheduleMatchModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-white"><i class="fas fa-calendar-plus text-emerald me-2"></i>Schedule Match</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="scheduleMatchForm">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Match Title *</label>
+                                <input type="text" id="matchTitle" class="form-control" required placeholder="e.g. India vs Australia - 1st ODI">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Date *</label>
+                                <input type="date" id="matchDate" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Format *</label>
+                                <select id="matchFormat" class="form-select" required>
+                                    <option value="T20">T20</option>
+                                    <option value="ODI">ODI</option>
+                                    <option value="Test">Test</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Team 1 *</label>
+                                <select id="matchTeam1" class="form-select" required></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Team 2 *</label>
+                                <select id="matchTeam2" class="form-select" required></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Venue</label>
+                                <select id="matchVenue" class="form-select"></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Status</label>
+                                <select id="matchStatus" class="form-select">
+                                    <option value="Scheduled">Scheduled</option>
+                                    <option value="Completed">Completed</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Winner Team (if completed)</label>
+                                <select id="matchWinner" class="form-select">
+                                    <option value="">None / Pending</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Result Description</label>
+                                <input type="text" id="matchResultText" class="form-control" placeholder="e.g. India won by 35 runs">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-emerald">Save Match</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: View Scorecard -->
+    <div class="modal fade" id="matchScorecardModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h4 class="modal-title fw-bold text-white mb-0" id="scorecardModalTitle">Match Scorecard</h4>
+                        <div class="small text-muted" id="scorecardSubTitle"></div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-success bg-opacity-10 border border-success border-opacity-25 text-emerald fw-bold mb-4" id="scorecardResultBanner"></div>
+
+                    <h5 class="fw-bold text-white mb-3"><i class="fas fa-baseball-bat-ball text-warning me-2"></i>Batting Scorecard</h5>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-dark-custom">
+                            <thead>
+                                <tr>
+                                    <th>Batsman</th>
+                                    <th>Dismissal</th>
+                                    <th>Runs</th>
+                                    <th>Balls</th>
+                                    <th>4s / 6s</th>
+                                    <th>SR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scorecardBattingBody"></tbody>
+                        </table>
+                    </div>
+
+                    <h5 class="fw-bold text-white mb-3"><i class="fas fa-volleyball text-danger me-2"></i>Bowling Scorecard</h5>
+                    <div class="table-responsive">
+                        <table class="table table-dark-custom">
+                            <thead>
+                                <tr>
+                                    <th>Bowler</th>
+                                    <th>Overs</th>
+                                    <th>Maidens</th>
+                                    <th>Runs Conceded</th>
+                                    <th>Wickets</th>
+                                    <th>Economy</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scorecardBowlingBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Record Scorecard Performance -->
+    <div class="modal fade" id="recordScoreModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-white"><i class="fas fa-plus text-emerald me-2"></i>Record Performance</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="entryMatchId">
+                    
+                    <ul class="nav nav-tabs border-secondary border-opacity-50 mb-3" id="scoreEntryTabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active text-warning" data-bs-toggle="tab" data-bs-target="#battingTab" type="button">
+                                <i class="fas fa-baseball-bat-ball me-1"></i> Batting Performance
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link text-danger" data-bs-toggle="tab" data-bs-target="#bowlingTab" type="button">
+                                <i class="fas fa-volleyball me-1"></i> Bowling Performance
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <!-- Batting -->
+                        <div class="tab-pane fade show active" id="battingTab">
+                            <form id="recordBattingForm">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Batting Team</label>
+                                        <select id="entryBatTeam" class="form-select" required></select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Batsman</label>
+                                        <select id="entryBatPlayer" class="form-select" required></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Runs Scored *</label>
+                                        <input type="number" id="entryBatRuns" class="form-control" required min="0" value="0">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Balls Faced *</label>
+                                        <input type="number" id="entryBatBalls" class="form-control" required min="0" value="0">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Fours (4s)</label>
+                                        <input type="number" id="entryBatFours" class="form-control" min="0" value="0">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Sixes (6s)</label>
+                                        <input type="number" id="entryBatSixes" class="form-control" min="0" value="0">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Dismissal</label>
+                                        <input type="text" id="entryBatDismissal" class="form-control" value="not out">
+                                    </div>
+                                    <div class="col-md-6 d-flex align-items-center mt-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="entryBatOut">
+                                            <label class="form-check-label text-white" for="entryBatOut">
+                                                Player was Dismissed (Out)
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 mt-3 text-end">
+                                        <button type="submit" class="btn btn-emerald"><i class="fas fa-save me-1"></i> Save Batting</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Bowling -->
+                        <div class="tab-pane fade" id="bowlingTab">
+                            <form id="recordBowlingForm">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Bowling Team</label>
+                                        <select id="entryBowlTeam" class="form-select" required></select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Bowler</label>
+                                        <select id="entryBowlPlayer" class="form-select" required></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Overs Bowled *</label>
+                                        <input type="number" step="0.1" id="entryBowlOvers" class="form-control" required min="0" value="4.0">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Maidens</label>
+                                        <input type="number" id="entryBowlMaidens" class="form-control" min="0" value="0">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Runs Conceded *</label>
+                                        <input type="number" id="entryBowlRuns" class="form-control" required min="0" value="0">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Wickets Taken *</label>
+                                        <input type="number" id="entryBowlWickets" class="form-control" required min="0" value="0">
+                                    </div>
+                                    <div class="col-12 mt-3 text-end">
+                                        <button type="submit" class="btn btn-emerald"><i class="fas fa-save me-1"></i> Save Bowling Spell</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container text-center">
+            <div><strong>Cricket Stats Management & Monitoring Database</strong></div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", initMatchesPage);
+    </script>
+</body>
+</html>

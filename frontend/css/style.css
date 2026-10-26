@@ -1,0 +1,294 @@
+/* ==========================================================
+   Cricket Stats Management - Custom Sports UI Theme
+   ========================================================== */
+
+:root {
+  --primary-color: #0f172a;
+  --secondary-color: #1e293b;
+  --card-bg: #1e293b;
+  --card-border: #334155;
+  --accent-green: #10b981;
+  --accent-blue: #3b82f6;
+  --accent-cyan: #06b6d4;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-radius: 12px;
+}
+
+body {
+  background-color: #0b1120;
+  color: var(--text-main);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Navbar */
+.navbar-custom {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--card-border);
+  padding: 0.85rem 1.5rem;
+}
+
+.navbar-brand {
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.5px;
+  color: #fff !important;
+}
+
+.navbar-brand span {
+  color: var(--accent-green);
+}
+
+.nav-link {
+  color: var(--text-muted) !important;
+  font-weight: 500;
+  padding: 0.5rem 1rem !important;
+  border-radius: 8px;
+  transition: all 0.2s ease-in-out;
+}
+
+.nav-link:hover, .nav-link.active {
+  color: #fff !important;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.nav-link.active {
+  color: var(--accent-green) !important;
+}
+
+/* Metric KPI Cards */
+.kpi-card {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.kpi-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 90px;
+  height: 90px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
+}
+
+.kpi-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+}
+
+.kpi-value {
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin: 0.35rem 0 0;
+}
+
+.kpi-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 600;
+}
+
+/* Generic Dark Cards */
+.card-dark {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+
+.card-header-dark {
+  background: transparent;
+  border-bottom: 1px solid var(--card-border);
+  padding: 1.15rem 1.5rem;
+}
+
+/* Tables */
+.table-dark-custom {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--text-main);
+  --bs-table-border-color: var(--card-border);
+  margin-bottom: 0;
+}
+
+.table-dark-custom th {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  background-color: rgba(15, 23, 42, 0.6);
+  padding: 0.9rem 1rem;
+}
+
+.table-dark-custom td {
+  padding: 0.9rem 1rem;
+  vertical-align: middle;
+}
+
+.table-dark-custom tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.table-dark-custom tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* Badges */
+.badge-role {
+  padding: 0.35em 0.75em;
+  font-weight: 600;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}
+
+.badge-batsman { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+.badge-bowler { background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+.badge-allrounder { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.badge-keeper { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+.badge-format {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  font-weight: 700;
+  border-radius: 4px;
+}
+
+/* Rank Badges */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.rank-1 { background: #eab308; color: #1e293b; }
+.rank-2 { background: #94a3b8; color: #1e293b; }
+.rank-3 { background: #b45309; color: #fff; }
+.rank-other { background: rgba(255, 255, 255, 0.1); color: var(--text-muted); }
+
+/* Buttons */
+.btn-emerald {
+  background-color: var(--accent-green);
+  color: #0b1120;
+  font-weight: 600;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btn-emerald:hover {
+  background-color: #059669;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.btn-outline-custom {
+  border-color: var(--card-border);
+  color: var(--text-main);
+}
+
+.btn-outline-custom:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--text-muted);
+  color: #fff;
+}
+
+/* Modals */
+.modal-content {
+  background-color: #1e293b;
+  border: 1px solid var(--card-border);
+  color: var(--text-main);
+  border-radius: var(--border-radius);
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--card-border);
+}
+
+.modal-footer {
+  border-top: 1px solid var(--card-border);
+}
+
+.form-control, .form-select {
+  background-color: #0f172a;
+  border: 1px solid var(--card-border);
+  color: var(--text-main);
+  border-radius: 8px;
+}
+
+.form-control:focus, .form-select:focus {
+  background-color: #0f172a;
+  border-color: var(--accent-green);
+  color: var(--text-main);
+  box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.25);
+}
+
+.form-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Avatars & Flags */
+.avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--card-border);
+}
+
+.team-logo-small {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.match-card {
+  background: linear-gradient(180deg, #1e293b 0%, #151f30 100%);
+  border: 1px solid var(--card-border);
+  border-radius: var(--border-radius);
+  transition: border-color 0.2s ease;
+}
+
+.match-card:hover {
+  border-color: var(--accent-blue);
+}
+
+/* Footer */
+footer {
+  margin-top: auto;
+  border-top: 1px solid var(--card-border);
+  background-color: #0f172a;
+  color: var(--text-muted);
+  padding: 1.5rem 0;
+  font-size: 0.85rem;
+}

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistics & Leaderboards - Cricket Stats DB</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+        <div class="container-fluid max-w-7xl">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                <i class="fas fa-baseball-bat-ball text-emerald fs-4"></i>
+                <span>Cric</span>Stats DB
+            </a>
+            <button class="navbar-toggler text-white border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navMenu">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 gap-1">
+                    <li class="nav-item"><a class="nav-link" href="/"><i class="fas fa-gauge-high me-1"></i> Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/players"><i class="fas fa-user-group me-1"></i> Players</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/teams"><i class="fas fa-shield-halved me-1"></i> Teams</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/matches"><i class="fas fa-trophy me-1"></i> Matches</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/statistics"><i class="fas fa-chart-pie me-1"></i> Leaderboards</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-4">
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+            <div>
+                <h2 class="fw-bold mb-1 text-white">Statistical Insights & Leaderboards</h2>
+                <p class="text-muted mb-0">High-performance analytics: top run scorers, top wicket takers, highest strike rates, and team standings.</p>
+            </div>
+        </div>
+
+        <!-- Section 1: Top Batsmen -->
+        <div class="card card-dark mb-4">
+            <div class="card-header-dark d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-white"><i class="fas fa-crown text-warning me-2"></i>Most Runs in Career</h5>
+                <span class="badge bg-secondary">Top 10 Batsmen</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark-custom">
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 60px;">Rank</th>
+                            <th>Player</th>
+                            <th>Total Runs</th>
+                            <th>Innings</th>
+                            <th>Highest</th>
+                            <th>Average</th>
+                            <th>Strike Rate</th>
+                            <th>100s / 50s</th>
+                            <th>4s / 6s</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topBatsmenTable">
+                        <tr><td colspan="9" class="text-center py-3 text-muted">Loading leaderboard...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Section 2: Top Bowlers -->
+        <div class="card card-dark mb-4">
+            <div class="card-header-dark d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-white"><i class="fas fa-volleyball text-danger me-2"></i>Most Wickets in Career</h5>
+                <span class="badge bg-secondary">Top 10 Bowlers</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark-custom">
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 60px;">Rank</th>
+                            <th>Player</th>
+                            <th>Wickets</th>
+                            <th>Overs</th>
+                            <th>Maidens</th>
+                            <th>Runs Conceded</th>
+                            <th>Average</th>
+                            <th>Economy</th>
+                            <th>5-Wickets</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topBowlersTable">
+                        <tr><td colspan="9" class="text-center py-3 text-muted">Loading leaderboard...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Section 3: Dual Column - Highest Scores & Strike Rates -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-7">
+                <div class="card card-dark h-100">
+                    <div class="card-header-dark">
+                        <h5 class="fw-bold mb-0 text-white"><i class="fas fa-fire text-danger me-2"></i>Highest Individual Match Scores</h5>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-dark-custom">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">#</th>
+                                    <th>Player</th>
+                                    <th>Runs</th>
+                                    <th>Balls</th>
+                                    <th>SR</th>
+                                    <th>4s / 6s</th>
+                                    <th>Format</th>
+                                    <th>Venue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="highestScoresTable">
+                                <tr><td colspan="8" class="text-center py-3 text-muted">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card card-dark h-100">
+                    <div class="card-header-dark">
+                        <h5 class="fw-bold mb-0 text-white"><i class="fas fa-bolt text-info me-2"></i>Highest Strike Rates</h5>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-dark-custom">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">#</th>
+                                    <th>Player</th>
+                                    <th>Strike Rate</th>
+                                    <th>Runs</th>
+                                    <th>Balls</th>
+                                </tr>
+                            </thead>
+                            <tbody id="strikeRatesTable">
+                                <tr><td colspan="5" class="text-center py-3 text-muted">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 4: Team Standings & Win Rates -->
+        <div class="card card-dark">
+            <div class="card-header-dark">
+                <h5 class="fw-bold mb-0 text-white"><i class="fas fa-ranking-star text-warning me-2"></i>Team Performance Standings</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark-custom">
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 60px;">Rank</th>
+                            <th>Team</th>
+                            <th>Matches Played</th>
+                            <th>Wins</th>
+                            <th>Losses</th>
+                            <th>Win %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="teamStandingsTable">
+                        <tr><td colspan="6" class="text-center py-3 text-muted">Loading team standings...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <footer>
+        <div class="container text-center">
+            <div><strong>Cricket Stats Management & Monitoring Database</strong></div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", initStatisticsPage);
+    </script>
+</body>
+</html>
