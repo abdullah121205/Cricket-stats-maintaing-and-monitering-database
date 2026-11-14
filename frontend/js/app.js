@@ -221,11 +221,20 @@ function renderLiveScores(matches) {
                     </div>
                     ` : '<div class="mt-auto"></div>'}
 
-                    <!-- Action: Track in Database -->
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-emerald w-100 py-1.5" onclick="importLiveMatchToDb(${idx})" id="importBtn-${idx}">
-                            <i class="fas fa-database me-1"></i> Track in Database
+                    <!-- Auto-Sync Status & Scorecard Link -->
+                    <div class="mt-2 d-flex gap-2 align-items-center">
+                        <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 py-1.5 px-2 flex-grow-1 text-truncate" title="Automatically synchronized with database">
+                            <i class="fas fa-check-circle me-1"></i> Auto-Synced in DB ${m.db_match_id ? '(#' + m.db_match_id + ')' : ''}
+                        </span>
+                        ${m.db_match_id ? `
+                        <a href="/matches?match_id=${m.db_match_id}" class="btn btn-sm btn-outline-info text-nowrap py-1">
+                            <i class="fas fa-file-lines me-1"></i> Scorecard
+                        </a>
+                        ` : `
+                        <button class="btn btn-sm btn-outline-emerald text-nowrap py-1" onclick="importLiveMatchToDb(${idx})" id="importBtn-${idx}">
+                            <i class="fas fa-database me-1"></i> Sync Now
                         </button>
+                        `}
                     </div>
                 </div>
             </div>

@@ -296,17 +296,58 @@ class CricketAPIClient:
             }
         ]
 
+    def _parse_int(self, val, default=0):
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return default
+
+    def _parse_overs_to_balls(self, overs_val):
+        try:
+            ov_str = str(overs_val).replace(" ov", "").strip()
+            ov = float(ov_str)
+            return int(int(ov) * 6 + round((ov % 1) * 10))
+        except (ValueError, TypeError):
+            return 0
+
+    def _sync_innings_score(self, match_id, innings_number, team_id, team_info, db_adapter):
+        runs = self._parse_int(team_info.get("runs"))
+        wickets = self._parse_int(team_info.get("wickets"))
+        legal_balls = self._parse_overs_to_balls(team_info.get("overs"))
+        
+        if runs <= 0 and wickets <= 0 and legal_balls <= 0:
+            return
+
+        existing = db_adapter.query_one(
+            "SELECT innings_id FROM innings WHERE match_id = %s AND innings_number = %s",
+            (match_id, innings_number)
+        )
+        if existing:
+            db_adapter.execute("""
+                UPDATE innings 
+                SET batting_team_id = %s, total_runs = %s, wickets_lost = %s, legal_balls = %s
+                WHERE innings_id = %s
+            """, (team_id, runs, wickets, legal_balls, existing["innings_id"]))
+        else:
+            db_adapter.execute("""
+                INSERT INTO innings (match_id, innings_number, batting_team_id, total_runs, wickets_lost, legal_balls)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (match_id, innings_number, team_id, runs, wickets, legal_balls))
+
     def import_live_match(self, match_data, db_adapter):
         """
-        Imports a live match from the live feed into the local relational database.
-        Resolves or creates teams, resolves venue, creates match & initial innings.
+        Imports or updates a live match from the live feed into the local database.
+        Resolves or creates teams, resolves venue, updates status, winner, and innings scores.
         """
         title = match_data.get("title") or "Live International Match"
         fmt = match_data.get("format", "T20")
         match_date = match_data.get("date", str(date.today()))
         venue_name = match_data.get("venue", "International Stadium")
-        status = "In Progress"
-        summary = match_data.get("summary", "Live match in progress")
+        summary = match_data.get("summary", "Match in progress")
+
+        # Determine status
+        is_completed = "won" in summary.lower() or "tied" in summary.lower() or "drawn" in summary.lower()
+        status = "Completed" if is_completed else ("In Progress" if match_data.get("is_live", True) else "Scheduled")
 
         team1_info = match_data.get("team1", {})
         team2_info = match_data.get("team2", {})
@@ -327,6 +368,14 @@ class CricketAPIClient:
         else:
             t2_id = t2_row["team_id"]
 
+        # Determine winner if completed
+        winner_team_id = None
+        if is_completed:
+            if t1_name.lower() in summary.lower() and "won" in summary.lower():
+                winner_team_id = t1_id
+            elif t2_name.lower() in summary.lower() and "won" in summary.lower():
+                winner_team_id = t2_id
+
         # 3. Resolve or create Venue
         venue_parts = [p.strip() for p in venue_name.split(",")]
         v_name = venue_parts[0]
@@ -339,44 +388,32 @@ class CricketAPIClient:
         else:
             v_id = v_row["venue_id"]
 
-        # 4. Check if already imported
+        # 4. Check if already recorded
         existing_match = db_adapter.query_one(
             "SELECT match_id FROM matches WHERE match_title = %s AND match_date = %s",
             (title, match_date)
         )
         if existing_match:
-            # Update status & summary
-            db_adapter.execute(
-                "UPDATE matches SET status = %s, result_summary = %s WHERE match_id = %s",
-                (status, summary, existing_match["match_id"])
-            )
-            return {"match_id": existing_match["match_id"], "is_new": False}
+            match_id = existing_match["match_id"]
+            db_adapter.execute("""
+                UPDATE matches 
+                SET status = %s, result_summary = %s, winner_team_id = COALESCE(%s, winner_team_id)
+                WHERE match_id = %s
+            """, (status, summary, winner_team_id, match_id))
+            self._sync_innings_score(match_id, 1, t2_id, team2_info, db_adapter)
+            self._sync_innings_score(match_id, 2, t1_id, team1_info, db_adapter)
+            return {"match_id": match_id, "is_new": False}
 
         # 5. Insert new match
         overs_limit = 20 if fmt == "T20" else (50 if fmt == "ODI" else None)
         new_match_id = db_adapter.execute("""
-            INSERT INTO matches (match_title, format, match_date, venue_id, team1_id, team2_id, overs_limit, status, result_summary)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (title, fmt, match_date, v_id, t1_id, t2_id, overs_limit, status, summary))
+            INSERT INTO matches (match_title, format, match_date, venue_id, team1_id, team2_id, overs_limit, status, winner_team_id, result_summary)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (title, fmt, match_date, v_id, t1_id, t2_id, overs_limit, status, winner_team_id, summary))
 
-        # 6. Add initial innings record if runs present
-        if team2_info.get("runs"):
-            # Innings 1 (Team 2 batted first)
-            t2_overs = float(str(team2_info.get("overs", 0.0)).replace(" ov", ""))
-            legal_balls = int(int(t2_overs) * 6 + round((t2_overs % 1) * 10))
-            db_adapter.execute("""
-                INSERT INTO innings (match_id, innings_number, batting_team_id, total_runs, wickets_lost, legal_balls)
-                VALUES (%s, 1, %s, %s, %s, %s)
-            """, (new_match_id, t2_id, team2_info.get("runs", 0), team2_info.get("wickets", 0), legal_balls))
-
-        if team1_info.get("runs"):
-            # Innings 2 (Team 1 currently batting)
-            t1_overs = float(str(team1_info.get("overs", 0.0)).replace(" ov", ""))
-            legal_balls = int(int(t1_overs) * 6 + round((t1_overs % 1) * 10))
-            db_adapter.execute("""
-                INSERT INTO innings (match_id, innings_number, batting_team_id, total_runs, wickets_lost, legal_balls)
-                VALUES (%s, 2, %s, %s, %s, %s)
-            """, (new_match_id, t1_id, team1_info.get("runs", 0), team1_info.get("wickets", 0), legal_balls))
+        # 6. Sync innings
+        self._sync_innings_score(new_match_id, 1, t2_id, team2_info, db_adapter)
+        self._sync_innings_score(new_match_id, 2, t1_id, team1_info, db_adapter)
 
         return {"match_id": new_match_id, "is_new": True}
 

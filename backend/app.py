@@ -24,6 +24,15 @@ def create_app():
     with app.app_context():
         try:
             Database.init_db()
+            # Automatically sync active live cricket matches into database on startup
+            try:
+                from api.cricket_api import cricket_api
+                live_res = cricket_api.get_live_scores()
+                for m in live_res.get("data", []):
+                    cricket_api.import_live_match(m, Database)
+                print(f"[LiveSync] Auto-synced {len(live_res.get('data', []))} live matches into database.")
+            except Exception as se:
+                print(f"[LiveSync Warning] Startup auto-sync skipped: {se}")
         except Exception as e:
             print(f"[App Init Warning] DB initialization error: {e}")
 
