@@ -49,6 +49,31 @@
                     <i class="fas fa-calendar-plus me-1"></i> Schedule Match
                 </a>
             </div>
+        <!-- Live Matches & Real-Time Scores Section -->
+        <div class="mb-4">
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="live-pulse"></span>
+                    <h5 class="fw-bold mb-0 text-white">Live International Matches</h5>
+                    <span class="badge live-badge-glow ms-1"><i class="fas fa-satellite-dish me-1"></i> LIVE FEED</span>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="form-check form-switch text-muted small d-flex align-items-center gap-2 mb-0 ps-0">
+                        <input class="form-check-input ms-0 me-1" type="checkbox" id="autoRefreshSwitch" checked>
+                        <label class="form-check-label text-nowrap" for="autoRefreshSwitch">Auto-refresh (15s)</label>
+                    </div>
+                    <button class="btn btn-sm btn-outline-custom" id="refreshLiveBtn" onclick="refreshLiveScoresManually()">
+                        <i class="fas fa-rotate me-1" id="refreshLiveIcon"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Matches Container -->
+            <div class="row g-3" id="liveScoresContainer">
+                <div class="col-12 text-center text-muted py-3">
+                    <i class="fas fa-spinner fa-spin me-2 text-danger"></i> Connecting to live cricket feed...
+                </div>
+            </div>
         </div>
 
         <!-- Metric KPI Cards -->

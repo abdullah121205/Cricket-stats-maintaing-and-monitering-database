@@ -63,14 +63,229 @@ function getFormatBadge(format) {
 
 function getStatusBadge(status) {
     if (status === "Completed") return '<span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50">Completed</span>';
-    if (status === "Live") return '<span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-50">Live</span>';
+    if (status === "Live" || status === "In Progress") return '<span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-50 d-inline-flex align-items-center"><span class="live-pulse"></span>' + (status === "In Progress" ? "In Progress" : "Live") + '</span>';
     return '<span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-50">Scheduled</span>';
+}
+
+// ----------------------------------------------------
+// LIVE SCORES CONTROLLER & SIMULATION ENGINE
+// ----------------------------------------------------
+let liveScoresData = [];
+let liveRefreshTimer = null;
+
+async function loadLiveScores(showFeedback = false) {
+    const container = document.getElementById("liveScoresContainer");
+    if (!container) return;
+
+    const icon = document.getElementById("refreshLiveIcon");
+    if (icon) icon.classList.add("fa-spin");
+
+    try {
+        const res = await fetch(`${API_BASE}/live/scores`);
+        const json = await res.json();
+        if (json.success && json.data) {
+            liveScoresData = json.data;
+            renderLiveScores(liveScoresData);
+            if (showFeedback) showToast("Live scores updated!", "success");
+        } else {
+            container.innerHTML = `<div class="col-12 text-center text-muted py-3">No live matches available currently.</div>`;
+        }
+    } catch (err) {
+        console.error("Live scores fetch error:", err);
+        container.innerHTML = `<div class="col-12 text-center text-danger py-3"><i class="fas fa-triangle-exclamation me-2"></i>Could not connect to live cricket feed.</div>`;
+    } finally {
+        if (icon) setTimeout(() => icon.classList.remove("fa-spin"), 600);
+    }
+}
+
+function refreshLiveScoresManually() {
+    loadLiveScores(true);
+}
+
+function setupLiveAutoRefresh() {
+    const sw = document.getElementById("autoRefreshSwitch");
+    if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+
+    liveRefreshTimer = setInterval(() => {
+        const auto = document.getElementById("autoRefreshSwitch");
+        if (auto && auto.checked) {
+            loadLiveScores(false);
+        }
+    }, 15000);
+
+    if (sw) {
+        sw.addEventListener("change", () => {
+            if (sw.checked) {
+                showToast("Auto-refresh enabled (every 15s)");
+                loadLiveScores(false);
+            } else {
+                showToast("Auto-refresh paused");
+            }
+        });
+    }
+}
+
+function renderLiveScores(matches) {
+    const container = document.getElementById("liveScoresContainer");
+    if (!container) return;
+
+    if (!matches || matches.length === 0) {
+        container.innerHTML = `<div class="col-12 text-center text-muted py-3">No active live matches found.</div>`;
+        return;
+    }
+
+    container.innerHTML = matches.map((m, idx) => {
+        const t1 = m.team1 || {};
+        const t2 = m.team2 || {};
+        const batters = m.current_batters || [];
+        const bowler = m.current_bowler;
+
+        return `
+            <div class="col-lg-4 col-md-6">
+                <div class="live-card p-3 h-100 d-flex flex-column">
+                    <!-- Top Bar -->
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="live-badge-glow">
+                                <span class="live-pulse"></span> ${m.status || 'LIVE'}
+                            </span>
+                            <span class="badge badge-format ms-1">${m.format}</span>
+                        </div>
+                        <span class="small text-muted text-truncate ms-2" style="max-width: 140px;" title="${m.venue || ''}">
+                            <i class="fas fa-location-dot me-1 text-danger"></i>${(m.venue || '').split(',')[0]}
+                        </span>
+                    </div>
+
+                    <!-- Match Title & Series -->
+                    <div class="mb-2">
+                        <div class="fw-bold text-white fs-6 text-truncate" title="${m.title}">
+                            ${m.title}
+                        </div>
+                        ${m.series ? `<div class="small text-muted" style="font-size: 0.76rem;">${m.series}</div>` : ''}
+                    </div>
+
+                    <!-- Scorecard Box -->
+                    <div class="bg-black bg-opacity-40 rounded p-2 mb-2 border border-secondary border-opacity-25">
+                        <div class="live-team-row">
+                            <span class="live-team-name d-flex align-items-center gap-1">
+                                ${t1.is_batting ? '<i class="fas fa-baseball-bat-ball text-emerald me-1 small"></i>' : ''}
+                                ${t1.name}
+                            </span>
+                            <span class="live-team-score text-white">
+                                ${t1.runs !== undefined ? t1.runs : '-'}${t1.wickets !== undefined ? '/' + t1.wickets : ''}
+                                ${t1.overs ? `<span class="live-overs">(${t1.overs})</span>` : ''}
+                            </span>
+                        </div>
+                        <div class="live-team-row">
+                            <span class="live-team-name d-flex align-items-center gap-1 text-light">
+                                ${t2.is_batting ? '<i class="fas fa-baseball-bat-ball text-emerald me-1 small"></i>' : ''}
+                                ${t2.name}
+                            </span>
+                            <span class="live-team-score text-secondary">
+                                ${t2.runs !== undefined ? t2.runs : '-'}${t2.wickets !== undefined ? '/' + t2.wickets : ''}
+                                ${t2.overs ? `<span class="live-overs text-secondary">(${t2.overs})</span>` : ''}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Situation Summary -->
+                    <div class="small fw-semibold text-warning mb-2 d-flex align-items-center gap-1">
+                        <i class="fas fa-circle-info text-info small"></i>
+                        <span class="text-truncate">${m.summary || 'Match in progress'}</span>
+                    </div>
+
+                    <!-- Current Batters & Bowler Box -->
+                    ${(batters.length > 0 || bowler) ? `
+                    <div class="live-player-box mb-3 mt-auto">
+                        ${batters.length > 0 ? `
+                        <div class="d-flex justify-content-between text-muted small border-bottom border-secondary border-opacity-25 pb-1 mb-1" style="font-size: 0.75rem;">
+                            <span>Batting:</span>
+                            <span>R (B)</span>
+                        </div>
+                        ${batters.map(b => `
+                            <div class="d-flex justify-content-between align-items-center small py-0.5">
+                                <span class="${b.on_strike ? 'text-emerald fw-bold' : 'text-light'}">
+                                    ${b.on_strike ? '▶ ' : '&nbsp;&nbsp;'}${b.name}
+                                </span>
+                                <span class="fw-semibold text-white">${b.runs} <span class="text-muted small">(${b.balls})</span></span>
+                            </div>
+                        `).join('')}
+                        ` : ''}
+
+                        ${bowler ? `
+                        <div class="d-flex justify-content-between align-items-center small pt-1 mt-1 border-top border-secondary border-opacity-25" style="font-size: 0.77rem;">
+                            <span class="text-muted">Bowling: <strong class="text-light">${bowler.name}</strong></span>
+                            <span class="text-white">${bowler.wickets}/${bowler.runs} <span class="text-muted">(${bowler.overs} ov)</span></span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ` : '<div class="mt-auto"></div>'}
+
+                    <!-- Action: Track in Database -->
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-emerald w-100 py-1.5" onclick="importLiveMatchToDb(${idx})" id="importBtn-${idx}">
+                            <i class="fas fa-database me-1"></i> Track in Database
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+async function importLiveMatchToDb(matchIdx) {
+    const match = liveScoresData[matchIdx];
+    if (!match) return;
+
+    const btn = document.getElementById(`importBtn-${matchIdx}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i> Saving to Database...`;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/live/import`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ match: match })
+        });
+        const json = await res.json();
+        if (json.success) {
+            showToast(json.message || "Match successfully recorded in database!");
+            if (btn) {
+                btn.className = "btn btn-sm btn-success w-100 py-1.5";
+                btn.innerHTML = `<i class="fas fa-check-circle me-1"></i> Tracked (Match #${json.match_id})`;
+            }
+            // Update Dashboard counter if present
+            const statMatchesEl = document.getElementById("stat-matches");
+            if (statMatchesEl && statMatchesEl.innerText !== "-" && json.is_new) {
+                statMatchesEl.innerText = Number(statMatchesEl.innerText) + 1;
+            }
+        } else {
+            showToast(json.message || "Failed to import match", "danger");
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fas fa-database me-1"></i> Track in Database`;
+            }
+        }
+    } catch (e) {
+        showToast("Error connecting to server", "danger");
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fas fa-database me-1"></i> Track in Database`;
+        }
+    }
 }
 
 // ----------------------------------------------------
 // 1. DASHBOARD CONTROLLER (index.html)
 // ----------------------------------------------------
 async function initDashboard() {
+    // 1. Initialize Live Scores Feed
+    loadLiveScores(false);
+    setupLiveAutoRefresh();
+
+    // 2. Fetch KPI & Aggregates
     try {
         const res = await fetch(`${API_BASE}/stats/summary`);
         const json = await res.json();

@@ -15,6 +15,7 @@ from backend.routes.teams import teams_bp
 from backend.routes.matches import matches_bp
 from backend.routes.venues import venues_bp
 from backend.routes.stats import stats_bp
+from backend.routes.live import live_bp
 
 def create_app():
     app = Flask(__name__, static_folder=str(BASE_DIR / "frontend"))
@@ -31,6 +32,7 @@ def create_app():
     app.register_blueprint(matches_bp)
     app.register_blueprint(venues_bp)
     app.register_blueprint(stats_bp)
+    app.register_blueprint(live_bp)
 
     @app.route("/")
     def index():
