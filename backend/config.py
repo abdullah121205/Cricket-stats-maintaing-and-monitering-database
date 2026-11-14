@@ -18,6 +18,9 @@ class Config:
     # SQLite Configuration
     SQLITE_DB_PATH = BASE_DIR / os.getenv("SQLITE_DB_PATH", "database/cricket_stats.db")
     
+    # External Cricket API Configuration
+    CRICKET_API_KEY = os.getenv("CRICKET_API_KEY", "").strip()
+
     # Server Configuration
     PORT = int(os.getenv("PORT", 5000))
     DEBUG = os.getenv("DEBUG", "False" if os.getenv("RENDER") else "True").lower() in ("true", "1", "t")

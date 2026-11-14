@@ -22,7 +22,7 @@ class CricketAPIClient:
         Uses CricAPI if CRICKET_API_KEY is configured; otherwise provides
         a dynamic, high-fidelity real-time simulation engine.
         """
-        if self.api_key:
+        if self.api_key and self.api_key != "YOUR_API_KEY_HERE":
             external_data = self._fetch_from_cricapi()
             if external_data and external_data.get("status") == "success":
                 return {
