@@ -13,3 +13,5 @@ services:
         value: sqlite
       - key: DEBUG
         value: "False"
+      - key: CRICKET_API_KEY
+        sync: false

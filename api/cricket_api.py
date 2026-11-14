@@ -8,13 +8,29 @@ import os
 import json
 import time
 from datetime import datetime, date
+from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError
+from dotenv import load_dotenv
+
+# Ensure .env is loaded regardless of import order
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 class CricketAPIClient:
     def __init__(self, api_key=None, base_url="https://api.cricapi.com/v1"):
-        self.api_key = api_key or os.getenv("CRICKET_API_KEY", "").strip()
+        self._api_key = api_key
         self.base_url = base_url
+
+    @property
+    def api_key(self):
+        """Dynamically reads the API key from environment so it is never stale."""
+        key = self._api_key or os.getenv("CRICKET_API_KEY", "")
+        return key.strip() if key else ""
+
+    @api_key.setter
+    def api_key(self, value):
+        self._api_key = value
 
     def get_live_scores(self):
         """
@@ -22,22 +38,25 @@ class CricketAPIClient:
         Uses CricAPI if CRICKET_API_KEY is configured; otherwise provides
         a dynamic, high-fidelity real-time simulation engine.
         """
-        if self.api_key and self.api_key != "YOUR_API_KEY_HERE":
+        current_key = self.api_key
+        if current_key and current_key != "YOUR_API_KEY_HERE":
             external_data = self._fetch_from_cricapi()
             if external_data and external_data.get("status") == "success":
-                return {
-                    "source": "cricapi",
-                    "status": "success",
-                    "count": len(external_data.get("data", [])),
-                    "data": self._normalize_cricapi_matches(external_data.get("data", []))
-                }
+                matches = external_data.get("data") or []
+                if matches:
+                    return {
+                        "source": "cricapi",
+                        "status": "success",
+                        "count": len(matches),
+                        "data": self._normalize_cricapi_matches(matches[:6])
+                    }
 
         # Dynamic simulation fallback with realistic live progression
         return {
             "source": "live_engine",
             "status": "success",
             "message": "Live feed active (Dynamic Real-Time Simulation)",
-            "has_api_key": bool(self.api_key),
+            "has_api_key": bool(current_key and current_key != "YOUR_API_KEY_HERE"),
             "data": self._generate_simulated_live_matches()
         }
 
@@ -45,7 +64,7 @@ class CricketAPIClient:
         url = f"{self.base_url}/currentMatches?apikey={self.api_key}"
         try:
             req = Request(url, headers={"User-Agent": "CricketStatsDatabase/1.0"})
-            with urlopen(req, timeout=8) as response:
+            with urlopen(req, timeout=12) as response:
                 return json.loads(response.read().decode())
         except (URLError, Exception) as e:
             print(f"[CricketAPI Warning] External fetch failed: {e}")
@@ -54,35 +73,45 @@ class CricketAPIClient:
     def _normalize_cricapi_matches(self, matches):
         normalized = []
         for m in matches:
-            teams = m.get("teams", ["Team A", "Team B"])
+            teams = m.get("teams") or []
             t1_name = teams[0] if len(teams) > 0 else "Team 1"
             t2_name = teams[1] if len(teams) > 1 else "Team 2"
             
-            score_entries = m.get("score", [])
-            t1_score = score_entries[0] if len(score_entries) > 0 else {}
-            t2_score = score_entries[1] if len(score_entries) > 1 else {}
+            score_entries = m.get("score") or []
+            t1_score = {}
+            t2_score = {}
+            if len(score_entries) >= 2:
+                t1_score = score_entries[0]
+                t2_score = score_entries[1]
+            elif len(score_entries) == 1:
+                t1_score = score_entries[0]
+
+            is_live = bool(m.get("matchStarted", False)) and not bool(m.get("matchEnded", False))
+            status_text = m.get("status") or ("LIVE" if is_live else "Scheduled")
 
             normalized.append({
                 "id": m.get("id"),
                 "title": m.get("name") or f"{t1_name} vs {t2_name}",
                 "format": (m.get("matchType") or "T20").upper(),
-                "status": m.get("status", "Live"),
-                "is_live": "won" not in m.get("status", "").lower(),
-                "venue": m.get("venue", "International Cricket Ground"),
-                "date": m.get("date", str(date.today())),
+                "status": "LIVE" if is_live else status_text,
+                "is_live": is_live,
+                "venue": m.get("venue") or "International Cricket Ground",
+                "date": m.get("date") or str(date.today()),
                 "team1": {
                     "name": t1_name,
-                    "runs": t1_score.get("r", 0),
-                    "wickets": t1_score.get("w", 0),
-                    "overs": t1_score.get("o", 0.0)
+                    "runs": t1_score.get("r", 0) if t1_score else "-",
+                    "wickets": t1_score.get("w", 0) if t1_score else "-",
+                    "overs": t1_score.get("o", 0.0) if t1_score else "",
+                    "is_batting": is_live and (t1_score.get("r") is not None)
                 },
                 "team2": {
                     "name": t2_name,
-                    "runs": t2_score.get("r", 0),
-                    "wickets": t2_score.get("w", 0),
-                    "overs": t2_score.get("o", 0.0)
+                    "runs": t2_score.get("r", 0) if t2_score else "-",
+                    "wickets": t2_score.get("w", 0) if t2_score else "-",
+                    "overs": t2_score.get("o", 0.0) if t2_score else "",
+                    "is_batting": False
                 },
-                "summary": m.get("status", ""),
+                "summary": status_text,
                 "current_batters": [],
                 "current_bowler": None
             })
