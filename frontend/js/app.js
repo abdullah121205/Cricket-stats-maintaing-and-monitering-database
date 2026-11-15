@@ -858,6 +858,7 @@ async function initMatchesPage() {
     document.getElementById("scheduleMatchForm")?.addEventListener("submit", handleScheduleMatch);
     document.getElementById("recordBattingForm")?.addEventListener("submit", handleRecordBatting);
     document.getElementById("recordBowlingForm")?.addEventListener("submit", handleRecordBowling);
+    document.getElementById("addPlayerToMatchForm")?.addEventListener("submit", handleAddPlayerToMatch);
 
     const params = new URLSearchParams(window.location.search);
     const mId = params.get("match_id");
@@ -1003,36 +1004,100 @@ async function handleScheduleMatch(e) {
     }
 }
 
+let currentScorecardData = null;
+
 async function viewScorecard(matchId) {
     try {
         const res = await fetch(`${API_BASE}/matches/${matchId}`);
         const json = await res.json();
         if (!json.success) return showToast("Could not load scorecard", "danger");
 
-        const { match, batting, bowling } = json.data;
+        currentScorecardData = json.data;
+        const { match, innings, batting, bowling, players } = json.data;
 
         document.getElementById("scorecardModalTitle").innerText = match.match_title || `${match.team1_name} vs ${match.team2_name}`;
         document.getElementById("scorecardSubTitle").innerText = `${match.format} • ${match.match_date} • ${match.venue_name || 'TBD'}`;
-        document.getElementById("scorecardResultBanner").innerText = match.result_summary || 'Status: ' + match.status;
+        
+        // Live badge & banner
+        const isLive = match.status === 'In Progress';
+        const liveBadgeEl = document.getElementById("scorecardLiveBadge");
+        if (liveBadgeEl) {
+            liveBadgeEl.innerHTML = isLive ? `<span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-50 px-2 py-1"><i class="fas fa-circle live-pulse me-1"></i> LIVE NOW</span>` : '';
+        }
+        
+        const bannerEl = document.getElementById("scorecardResultBanner");
+        if (bannerEl) {
+            bannerEl.className = isLive 
+                ? "alert alert-warning bg-opacity-10 border border-warning border-opacity-25 text-warning fw-bold mb-4" 
+                : "alert alert-success bg-opacity-10 border border-success border-opacity-25 text-emerald fw-bold mb-4";
+            bannerEl.innerHTML = `<i class="${isLive ? 'fas fa-satellite-dish' : 'fas fa-trophy'} me-2"></i> ${match.result_summary || 'Status: ' + match.status}`;
+        }
 
+        // Innings Overview Summary Cards (Total Runs, Wickets, Overs, Run Rate)
+        const innContainer = document.getElementById("scorecardInningsOverview");
+        if (innContainer) {
+            if (innings && innings.length > 0) {
+                innContainer.innerHTML = `
+                    <div class="row g-3">
+                        ${innings.map((inn, idx) => {
+                            const isCurrentInnings = isLive && (idx === innings.length - 1);
+                            return `
+                            <div class="col-md-6">
+                                <div class="innings-card ${isCurrentInnings ? 'active-innings' : ''}">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="text-muted small fw-semibold text-uppercase tracking-wider">Innings ${inn.innings_number}</span>
+                                        ${isCurrentInnings ? '<span class="badge bg-danger text-white small px-2 py-0.5"><i class="fas fa-circle live-pulse me-1"></i> Batting</span>' : ''}
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-baseline">
+                                        <h5 class="fw-bold text-white mb-0">${inn.batting_team_name}</h5>
+                                        <div class="fs-4 fw-extrabold text-emerald">
+                                            ${inn.total_runs}<span class="text-muted fs-6">/${inn.wickets_lost}</span>
+                                            <span class="fs-6 text-muted fw-normal ms-1">(${inn.overs || 0} ov)</span>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between text-muted small mt-2 pt-2 border-top border-secondary border-opacity-25">
+                                        <span>Current Run Rate: <strong class="text-light">${inn.run_rate || '0.00'}</strong></span>
+                                        <span>Extras: <strong class="text-light">${(inn.wides || 0) + (inn.no_balls || 0) + (inn.byes || 0) + (inn.leg_byes || 0)}</strong></span>
+                                    </div>
+                                </div>
+                            </div>
+                            `;
+                        }).join("")}
+                    </div>
+                `;
+            } else {
+                innContainer.innerHTML = `
+                    <div class="card card-dark p-3 text-center text-muted small">
+                        <i class="far fa-clock mb-1"></i> Match scheduled. Team scores and overs will appear once innings begin.
+                    </div>
+                `;
+            }
+        }
+
+        // Batting Scorecard Table
         const batTbody = document.getElementById("scorecardBattingBody");
-        if (batting.length === 0) {
-            batTbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-muted">No batting scorecard entries for this match yet.</td></tr>`;
+        if (!batting || batting.length === 0) {
+            batTbody.innerHTML = `<tr><td colspan="7" class="text-center py-3 text-muted">No batting scorecard entries for this match yet.</td></tr>`;
         } else {
             batTbody.innerHTML = batting.map(b => `
                 <tr>
-                    <td class="fw-bold text-white">${b.player_name}</td>
-                    <td class="text-muted small">${b.dismissal_kind || 'not out'}</td>
+                    <td class="fw-bold text-white">
+                        ${b.player_name}
+                        ${b.is_out ? '' : ' <span class="badge bg-success bg-opacity-25 text-success small py-0 px-1">*</span>'}
+                    </td>
+                    <td class="text-muted small">${b.batting_team_name || '-'}</td>
+                    <td class="text-muted small">${b.dismissal_kind || (b.is_out ? 'out' : 'not out')}</td>
                     <td class="fw-bold text-warning">${b.runs}</td>
                     <td>${b.balls_faced}</td>
                     <td>${b.fours} / ${b.sixes}</td>
-                    <td>${b.strike_rate || '0.00'}</td>
+                    <td class="fw-semibold text-light">${b.strike_rate || '0.00'}</td>
                 </tr>
             `).join("");
         }
 
+        // Bowling Scorecard Table
         const bowlTbody = document.getElementById("scorecardBowlingBody");
-        if (bowling.length === 0) {
+        if (!bowling || bowling.length === 0) {
             bowlTbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-muted">No bowling scorecard entries for this match yet.</td></tr>`;
         } else {
             bowlTbody.innerHTML = bowling.map(bw => `
@@ -1042,15 +1107,236 @@ async function viewScorecard(matchId) {
                     <td>${bw.maidens}</td>
                     <td>${bw.runs_conceded}</td>
                     <td class="fw-bold text-emerald">${bw.wickets}</td>
-                    <td>${bw.economy_rate || '0.00'}</td>
+                    <td class="fw-semibold text-light">${bw.economy_rate || '0.00'}</td>
                 </tr>
             `).join("");
         }
 
-        const modal = new bootstrap.Modal(document.getElementById("matchScorecardModal"));
+        // Match Squads & Playing XI Container
+        renderMatchSquads(match, players || []);
+
+        const modalEl = document.getElementById("matchScorecardModal");
+        let modal = bootstrap.Modal.getInstance(modalEl);
+        if (!modal) {
+            modal = new bootstrap.Modal(modalEl);
+        }
         modal.show();
     } catch (e) {
         console.error("View scorecard error:", e);
+        showToast("Error loading match scorecard", "danger");
+    }
+}
+
+function renderMatchSquads(match, players) {
+    const container = document.getElementById("scorecardSquadsContainer");
+    if (!container) return;
+
+    // Filter players per team
+    const t1Players = players.filter(p => p.team_id === match.team1_id);
+    const t2Players = players.filter(p => p.team_id === match.team2_id);
+
+    const renderTeamSquadCard = (teamName, teamId, squad) => {
+        const playingXiCount = squad.filter(p => p.playing_xi).length;
+        return `
+        <div class="col-md-6">
+            <div class="squad-card h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+                    <div>
+                        <h6 class="fw-bold text-white mb-0">${teamName}</h6>
+                        <span class="small text-muted">${squad.length} Players (${playingXiCount} in Playing XI)</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-emerald py-0.5 px-2" onclick="openAddPlayerToMatchModal(${match.match_id}, ${teamId})">
+                        <i class="fas fa-plus me-1"></i> Add
+                    </button>
+                </div>
+
+                <div class="squad-list" style="max-height: 260px; overflow-y: auto;">
+                    ${squad.length === 0 ? `
+                        <div class="text-center text-muted py-3 small">
+                            No players assigned to ${teamName} yet.<br>
+                            Click <strong>Add</strong> to select or add new players.
+                        </div>
+                    ` : squad.map(p => `
+                        <div class="squad-player-item">
+                            <div>
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="text-white fw-semibold small">${p.player_name}</span>
+                                    ${p.captain ? '<span class="badge-captain">C</span>' : ''}
+                                    ${p.wicketkeeper ? '<span class="badge-keeper">WK</span>' : ''}
+                                    ${p.playing_xi ? '<span class="badge-xi">XI</span>' : ''}
+                                </div>
+                                <span class="text-muted" style="font-size: 0.72rem;">${p.role} • ${p.batting_style || 'Right-hand bat'}</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                ${getRoleBadge(p.role)}
+                                <button class="btn btn-sm text-danger p-0 border-0" title="Remove from Match" onclick="removePlayerFromMatch(${match.match_id}, ${p.player_id}, '${p.player_name.replace(/'/g, "\\'")}')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join("")}
+                </div>
+            </div>
+        </div>
+        `;
+    };
+
+    container.innerHTML = `
+        ${renderTeamSquadCard(match.team1_name, match.team1_id, t1Players)}
+        ${renderTeamSquadCard(match.team2_name, match.team2_id, t2Players)}
+    `;
+}
+
+function openAddPlayerToMatchModalFromScorecard() {
+    if (!currentScorecardData || !currentScorecardData.match) return;
+    openAddPlayerToMatchModal(currentScorecardData.match.match_id);
+}
+
+function openRecordScoreModalFromScorecard() {
+    if (!currentScorecardData || !currentScorecardData.match) return;
+    const m = currentScorecardData.match;
+    openRecordScoreModal(m.match_id, m.team1_id, m.team2_id, m.team1_name, m.team2_name);
+}
+
+async function openAddPlayerToMatchModal(matchId, preferredTeamId = null) {
+    const match = currentScorecardData ? currentScorecardData.match : allMatches.find(m => m.match_id === matchId);
+    if (!match) return;
+
+    document.getElementById("addMatchPlayerMatchId").value = match.match_id;
+
+    // Populate team selector
+    const teamSelect = document.getElementById("addMatchPlayerTeam");
+    if (teamSelect) {
+        teamSelect.innerHTML = `
+            <option value="${match.team1_id}">${match.team1_name}</option>
+            <option value="${match.team2_id}">${match.team2_name}</option>
+        `;
+        if (preferredTeamId) teamSelect.value = preferredTeamId;
+    }
+
+    // Reset radio and form
+    document.getElementById("srcExistingPlayer").checked = true;
+    togglePlayerSourceMode();
+
+    // Populate existing players
+    try {
+        const res = await fetch(`${API_BASE}/players`);
+        const json = await res.json();
+        if (json.success) {
+            const selectEl = document.getElementById("addMatchPlayerExisting");
+            selectEl.innerHTML = `<option value="">Select Registered Player</option>` + json.data.map(p => `
+                <option value="${p.player_id}">${p.full_name || p.name} (${p.role} - ${p.nationality || p.country})</option>
+            `).join("");
+        }
+    } catch (e) {
+        console.error("Failed to load players for modal:", e);
+    }
+
+    // Reset new player fields
+    document.getElementById("addMatchPlayerFullName").value = "";
+    document.getElementById("addMatchPlayerRole").value = "Batter";
+    document.getElementById("addMatchPlayerNationality").value = "";
+    document.getElementById("addMatchPlayerPlayingXi").checked = true;
+    document.getElementById("addMatchPlayerCaptain").checked = false;
+    document.getElementById("addMatchPlayerWicketkeeper").checked = false;
+
+    const modal = new bootstrap.Modal(document.getElementById("addPlayerToMatchModal"));
+    modal.show();
+}
+
+function togglePlayerSourceMode() {
+    const isNew = document.getElementById("srcNewPlayer").checked;
+    const existingSec = document.getElementById("sectionExistingPlayer");
+    const newSec = document.getElementById("sectionNewPlayer");
+
+    if (isNew) {
+        existingSec.classList.add("d-none");
+        newSec.classList.remove("d-none");
+    } else {
+        existingSec.classList.remove("d-none");
+        newSec.classList.add("d-none");
+    }
+}
+
+async function handleAddPlayerToMatch(e) {
+    e.preventDefault();
+    const matchId = document.getElementById("addMatchPlayerMatchId").value;
+    const teamId = document.getElementById("addMatchPlayerTeam").value;
+    const isNew = document.getElementById("srcNewPlayer").checked;
+
+    let payload = {
+        team_id: parseInt(teamId),
+        playing_xi: document.getElementById("addMatchPlayerPlayingXi").checked ? 1 : 0,
+        captain: document.getElementById("addMatchPlayerCaptain").checked ? 1 : 0,
+        wicketkeeper: document.getElementById("addMatchPlayerWicketkeeper").checked ? 1 : 0
+    };
+
+    if (isNew) {
+        const fullName = document.getElementById("addMatchPlayerFullName").value.trim();
+        if (!fullName) return showToast("Player full name is required", "warning");
+
+        payload.full_name = fullName;
+        payload.role = document.getElementById("addMatchPlayerRole").value;
+        payload.batting_style = document.getElementById("addMatchPlayerBattingStyle").value;
+        payload.bowling_style = document.getElementById("addMatchPlayerBowlingStyle").value;
+        payload.nationality = document.getElementById("addMatchPlayerNationality").value.trim() || null;
+    } else {
+        const playerId = document.getElementById("addMatchPlayerExisting").value;
+        if (!playerId) return showToast("Please select a player", "warning");
+        payload.player_id = parseInt(playerId);
+    }
+
+    const submitBtn = document.getElementById("btnAddPlayerToMatchSubmit");
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i> Saving...`;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/matches/${matchId}/players`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        if (json.success) {
+            showToast(json.message || "Player added to match and database!");
+            const modalEl = document.getElementById("addPlayerToMatchModal");
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            // Refresh scorecard
+            await viewScorecard(matchId);
+        } else {
+            showToast(json.message || "Failed to add player to match", "danger");
+        }
+    } catch (err) {
+        console.error("Add player to match error:", err);
+        showToast("Error adding player to match", "danger");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fas fa-check me-1"></i> Add to Match Squad`;
+        }
+    }
+}
+
+async function removePlayerFromMatch(matchId, playerId, playerName) {
+    if (!confirm(`Are you sure you want to remove "${playerName}" from this match squad?`)) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/matches/${matchId}/players/${playerId}`, {
+            method: "DELETE"
+        });
+        const json = await res.json();
+        if (json.success) {
+            showToast(json.message || "Player removed from match squad");
+            await viewScorecard(matchId);
+        } else {
+            showToast(json.message || "Could not remove player", "danger");
+        }
+    } catch (err) {
+        console.error("Remove player error:", err);
+        showToast("Error removing player", "danger");
     }
 }
 
@@ -1112,6 +1398,10 @@ async function handleRecordBatting(e) {
         if (json.success) {
             showToast("Batting score recorded successfully!");
             document.getElementById("recordBattingForm").reset();
+            // Automatically refresh scorecard if open
+            if (currentScorecardData && currentScorecardData.match && String(currentScorecardData.match.match_id) === String(matchId)) {
+                await viewScorecard(matchId);
+            }
         } else {
             showToast(json.message || "Failed to record score", "danger");
         }
@@ -1142,6 +1432,10 @@ async function handleRecordBowling(e) {
         if (json.success) {
             showToast("Bowling spell recorded successfully!");
             document.getElementById("recordBowlingForm").reset();
+            // Automatically refresh scorecard if open
+            if (currentScorecardData && currentScorecardData.match && String(currentScorecardData.match.match_id) === String(matchId)) {
+                await viewScorecard(matchId);
+            }
         } else {
             showToast(json.message || "Failed to record bowling", "danger");
         }

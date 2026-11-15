@@ -63,6 +63,18 @@ def get_match(match_id):
     if not match:
         return jsonify({"success": False, "message": "Match not found"}), 404
 
+    # Innings summary totals (Total Runs, Wickets, Overs, Run Rate)
+    innings = Database.query_all("""
+        SELECT i.*, 
+               t.team_name AS batting_team_name,
+               ROUND(i.legal_balls / 6.0, 1) AS overs,
+               ROUND(i.total_runs * 6.0 / NULLIF(i.legal_balls, 0), 2) AS run_rate
+        FROM innings i
+        JOIN teams t ON i.batting_team_id = t.team_id
+        WHERE i.match_id = %s
+        ORDER BY i.innings_number ASC
+    """, (match_id,))
+
     # Batting entries
     batting = Database.query_all("""
         SELECT bs.*, p.full_name AS player_name, bt.team_name AS batting_team_name,
@@ -87,12 +99,30 @@ def get_match(match_id):
         ORDER BY i.innings_number ASC, bw.wickets DESC, bw.runs_conceded ASC
     """, (match_id,))
 
+    # Match Squad Players
+    players = Database.query_all("""
+        SELECT mp.*, 
+               p.full_name AS player_name, 
+               p.role, 
+               p.nationality, 
+               p.batting_style, 
+               p.bowling_style,
+               t.team_name
+        FROM match_players mp
+        JOIN players p ON mp.player_id = p.player_id
+        JOIN teams t ON mp.team_id = t.team_id
+        WHERE mp.match_id = %s
+        ORDER BY mp.team_id ASC, mp.playing_xi DESC, p.full_name ASC
+    """, (match_id,))
+
     return jsonify({
         "success": True,
         "data": {
             "match": match,
+            "innings": innings,
             "batting": batting,
-            "bowling": bowling
+            "bowling": bowling,
+            "players": players
         }
     })
 
@@ -180,6 +210,108 @@ def add_bowling_score(match_id):
     """, (inn_id, player_id, legal_balls, maidens, runs_conceded, wickets))
 
     return jsonify({"success": True, "message": "Bowling recorded", "bowling_stat_id": stat_id}), 201
+
+@matches_bp.route("/<int:match_id>/players", methods=["GET"])
+def get_match_players(match_id):
+    players = Database.query_all("""
+        SELECT mp.*, 
+               p.full_name AS player_name, 
+               p.role, 
+               p.nationality, 
+               p.batting_style, 
+               p.bowling_style,
+               t.team_name
+        FROM match_players mp
+        JOIN players p ON mp.player_id = p.player_id
+        JOIN teams t ON mp.team_id = t.team_id
+        WHERE mp.match_id = %s
+        ORDER BY mp.team_id ASC, mp.playing_xi DESC, p.full_name ASC
+    """, (match_id,))
+    return jsonify({"success": True, "data": players, "count": len(players)})
+
+@matches_bp.route("/<int:match_id>/players", methods=["POST"])
+def add_match_player(match_id):
+    data = request.json or {}
+    team_id = data.get("team_id")
+    player_id = data.get("player_id")
+    full_name = (data.get("full_name") or data.get("name") or "").strip()
+    role = data.get("role", "Batter")
+    batting_style = data.get("batting_style", "Right-hand bat")
+    bowling_style = data.get("bowling_style", "")
+    playing_xi = 1 if data.get("playing_xi", True) else 0
+    captain = 1 if data.get("captain", False) else 0
+    wicketkeeper = 1 if data.get("wicketkeeper", False) else 0
+
+    if not team_id:
+        return jsonify({"success": False, "message": "Team selection is required"}), 400
+
+    # If player_id is provided, verify it exists
+    if player_id and str(player_id).isdigit():
+        p_row = Database.query_one("SELECT player_id, full_name FROM players WHERE player_id = %s", (player_id,))
+        if not p_row:
+            return jsonify({"success": False, "message": "Selected player does not exist"}), 404
+        actual_player_id = p_row["player_id"]
+        player_name = p_row["full_name"]
+    elif full_name:
+        # Check if player already exists by name
+        existing = Database.query_one("SELECT player_id FROM players WHERE full_name = %s", (full_name,))
+        if existing:
+            actual_player_id = existing["player_id"]
+        else:
+            team = Database.query_one("SELECT country, team_name FROM teams WHERE team_id = %s", (team_id,))
+            nat = data.get("nationality") or (team["country"] if team and team["country"] else (team["team_name"] if team else "International"))
+            actual_player_id = Database.execute("""
+                INSERT INTO players (full_name, nationality, role, batting_style, bowling_style, is_active)
+                VALUES (%s, %s, %s, %s, %s, 1)
+            """, (full_name, nat, role, batting_style, bowling_style))
+        player_name = full_name
+    else:
+        return jsonify({"success": False, "message": "Either an existing player or a player name must be provided"}), 400
+
+    # Check if player is already linked in match_players
+    existing_mp = Database.query_one(
+        "SELECT match_player_id FROM match_players WHERE match_id = %s AND player_id = %s",
+        (match_id, actual_player_id)
+    )
+    if existing_mp:
+        Database.execute("""
+            UPDATE match_players
+            SET team_id = %s, playing_xi = %s, captain = %s, wicketkeeper = %s
+            WHERE match_player_id = %s
+        """, (team_id, playing_xi, captain, wicketkeeper, existing_mp["match_player_id"]))
+        return jsonify({
+            "success": True, 
+            "message": f"Updated {player_name} in match squad",
+            "match_player_id": existing_mp["match_player_id"],
+            "player_id": actual_player_id
+        })
+
+    mp_id = Database.execute("""
+        INSERT INTO match_players (match_id, player_id, team_id, playing_xi, captain, wicketkeeper)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """, (match_id, actual_player_id, team_id, playing_xi, captain, wicketkeeper))
+
+    return jsonify({
+        "success": True,
+        "message": f"{player_name} added to match squad and database!",
+        "match_player_id": mp_id,
+        "player_id": actual_player_id
+    }), 201
+
+@matches_bp.route("/<int:match_id>/players/<int:player_id>", methods=["DELETE"])
+def remove_match_player(match_id, player_id):
+    existing = Database.query_one(
+        "SELECT match_player_id FROM match_players WHERE match_id = %s AND player_id = %s",
+        (match_id, player_id)
+    )
+    if not existing:
+        return jsonify({"success": False, "message": "Player not found in this match squad"}), 404
+
+    Database.execute(
+        "DELETE FROM match_players WHERE match_id = %s AND player_id = %s",
+        (match_id, player_id)
+    )
+    return jsonify({"success": True, "message": "Player removed from match squad"})
 
 @matches_bp.route("/<int:match_id>", methods=["DELETE"])
 def delete_match(match_id):

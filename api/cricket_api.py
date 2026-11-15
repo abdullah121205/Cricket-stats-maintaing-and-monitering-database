@@ -334,6 +334,294 @@ class CricketAPIClient:
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (match_id, innings_number, team_id, runs, wickets, legal_balls))
 
+    def _sync_live_players_and_stats(self, match_id, t1_id, t2_id, match_data, db_adapter):
+        """
+        Automatically adds/updates live batters and bowlers in the players table,
+        assigns them to match_players, and records their live batting and bowling stats.
+        """
+        batters = match_data.get("current_batters") or []
+        bowler = match_data.get("current_bowler")
+        team1_info = match_data.get("team1") or {}
+        team2_info = match_data.get("team2") or {}
+
+        # Determine which team is batting
+        t1_is_batting = team1_info.get("is_batting", True)
+        batting_team_id = t1_id if t1_is_batting else t2_id
+        bowling_team_id = t2_id if t1_is_batting else t1_id
+        batting_team_name = team1_info.get("name") if t1_is_batting else team2_info.get("name")
+        bowling_team_name = team2_info.get("name") if t1_is_batting else team1_info.get("name")
+
+        # Find the active innings for the batting team
+        inn_row = db_adapter.query_one(
+            "SELECT innings_id FROM innings WHERE match_id = %s AND batting_team_id = %s",
+            (match_id, batting_team_id)
+        )
+        inn_id = inn_row["innings_id"] if inn_row else None
+
+        # 1. Sync Batters
+        for b_pos, b in enumerate(batters, start=1):
+            p_name = (b.get("name") or "").strip()
+            if not p_name:
+                continue
+
+            # Ensure player exists
+            p_row = db_adapter.query_one("SELECT player_id FROM players WHERE full_name = %s", (p_name,))
+            if not p_row:
+                p_id = db_adapter.execute("""
+                    INSERT INTO players (full_name, nationality, role, is_active)
+                    VALUES (%s, %s, 'Batter', 1)
+                """, (p_name, batting_team_name or "International"))
+            else:
+                p_id = p_row["player_id"]
+
+            # Ensure in match_players
+            mp_row = db_adapter.query_one(
+                "SELECT match_player_id FROM match_players WHERE match_id = %s AND player_id = %s",
+                (match_id, p_id)
+            )
+            if not mp_row:
+                db_adapter.execute("""
+                    INSERT INTO match_players (match_id, player_id, team_id, playing_xi)
+                    VALUES (%s, %s, %s, 1)
+                """, (match_id, p_id, batting_team_id))
+
+            # Record in batting_stats
+            if inn_id:
+                runs = self._parse_int(b.get("runs", 0))
+                balls = self._parse_int(b.get("balls", 0))
+                fours = self._parse_int(b.get("fours", 0))
+                sixes = self._parse_int(b.get("sixes", 0))
+
+                bs_row = db_adapter.query_one(
+                    "SELECT batting_stat_id FROM batting_stats WHERE innings_id = %s AND player_id = %s",
+                    (inn_id, p_id)
+                )
+                if bs_row:
+                    db_adapter.execute("""
+                        UPDATE batting_stats
+                        SET runs = %s, balls_faced = %s, fours = %s, sixes = %s, is_out = 0, batting_position = %s
+                        WHERE batting_stat_id = %s
+                    """, (runs, balls, fours, sixes, b_pos, bs_row["batting_stat_id"]))
+                else:
+                    db_adapter.execute("""
+                        INSERT INTO batting_stats (innings_id, player_id, batting_position, runs, balls_faced, fours, sixes, is_out, dismissal_kind)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 0, 'not out')
+                    """, (inn_id, p_id, b_pos, runs, balls, fours, sixes))
+
+        # 2. Sync Bowler
+        if bowler:
+            bw_name = (bowler.get("name") or "").strip()
+            if bw_name:
+                bw_p_row = db_adapter.query_one("SELECT player_id FROM players WHERE full_name = %s", (bw_name,))
+                if not bw_p_row:
+                    bw_p_id = db_adapter.execute("""
+                        INSERT INTO players (full_name, nationality, role, is_active)
+                        VALUES (%s, %s, 'Bowler', 1)
+                    """, (bw_name, bowling_team_name or "International"))
+                else:
+                    bw_p_id = bw_p_row["player_id"]
+
+                # Ensure in match_players
+                mp_row = db_adapter.query_one(
+                    "SELECT match_player_id FROM match_players WHERE match_id = %s AND player_id = %s",
+                    (match_id, bw_p_id)
+                )
+                if not mp_row:
+                    db_adapter.execute("""
+                        INSERT INTO match_players (match_id, player_id, team_id, playing_xi)
+                        VALUES (%s, %s, %s, 1)
+                    """, (match_id, bw_p_id, bowling_team_id))
+
+                # Record in bowling_stats
+                if inn_id:
+                    legal_balls = self._parse_overs_to_balls(bowler.get("overs", 0))
+                    maidens = self._parse_int(bowler.get("maidens", 0))
+                    runs_conceded = self._parse_int(bowler.get("runs", 0))
+                    wickets = self._parse_int(bowler.get("wickets", 0))
+
+                    bw_stat_row = db_adapter.query_one(
+                        "SELECT bowling_stat_id FROM bowling_stats WHERE innings_id = %s AND player_id = %s",
+                        (inn_id, bw_p_id)
+                    )
+                    if bw_stat_row:
+                        db_adapter.execute("""
+                            UPDATE bowling_stats
+                            SET legal_balls = %s, maidens = %s, runs_conceded = %s, wickets = %s
+                            WHERE bowling_stat_id = %s
+                        """, (legal_balls, maidens, runs_conceded, wickets, bw_stat_row["bowling_stat_id"]))
+                    else:
+                        db_adapter.execute("""
+                            INSERT INTO bowling_stats (innings_id, player_id, legal_balls, maidens, runs_conceded, wickets)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, (inn_id, bw_p_id, legal_balls, maidens, runs_conceded, wickets))
+
+    def fetch_match_scorecard(self, cricapi_id):
+        """Fetches full match scorecard from CricAPI for given match id."""
+        if not self.api_key or self.api_key == "YOUR_API_KEY_HERE":
+            return None
+        url = f"{self.base_url}/match_scorecard?apikey={self.api_key}&id={cricapi_id}"
+        try:
+            req = Request(url, headers={"User-Agent": "CricketStats/1.0"})
+            with urlopen(req, timeout=12) as response:
+                res = json.loads(response.read().decode())
+                if res.get("status") == "success":
+                    return res.get("data")
+        except Exception as e:
+            print(f"[CricketAPI Warning] Could not fetch scorecard for {cricapi_id}: {e}")
+        return None
+
+    def _sync_cricapi_scorecard_to_db(self, match_id, t1_id, t2_id, t1_name, t2_name, sc_data, db_adapter):
+        """
+        Syncs full CricAPI scorecard: all innings, real batters, bowlers, and playing XIs into the database.
+        """
+        scorecards = sc_data.get("scorecard", [])
+        if not scorecards:
+            return
+
+        for inn_idx, inn in enumerate(scorecards, start=1):
+            inn_title = (inn.get("inning") or "").lower()
+            
+            # Determine batting and bowling team
+            if t1_name.lower() in inn_title:
+                batting_team_id, bowling_team_id = t1_id, t2_id
+                batting_nat, bowling_nat = t1_name, t2_name
+            elif t2_name.lower() in inn_title:
+                batting_team_id, bowling_team_id = t2_id, t1_id
+                batting_nat, bowling_nat = t2_name, t1_name
+            else:
+                if inn_idx % 2 == 1:
+                    batting_team_id, bowling_team_id = t1_id, t2_id
+                    batting_nat, bowling_nat = t1_name, t2_name
+                else:
+                    batting_team_id, bowling_team_id = t2_id, t1_id
+                    batting_nat, bowling_nat = t2_name, t1_name
+
+            batters = inn.get("batting", [])
+            bowlers = inn.get("bowling", [])
+
+            total_runs = sum(self._parse_int(b.get("r", 0)) for b in batters)
+            wickets_lost = sum(1 for b in batters if b.get("dismissal") and b.get("dismissal") != "not out")
+            legal_balls = sum(self._parse_overs_to_balls(bw.get("o", 0)) for bw in bowlers)
+
+            # Ensure innings record exists
+            inn_row = db_adapter.query_one(
+                "SELECT innings_id FROM innings WHERE match_id = %s AND innings_number = %s",
+                (match_id, inn_idx)
+            )
+            if inn_row:
+                inn_id = inn_row["innings_id"]
+                db_adapter.execute("""
+                    UPDATE innings
+                    SET batting_team_id = %s, total_runs = %s, wickets_lost = %s, legal_balls = %s
+                    WHERE innings_id = %s
+                """, (batting_team_id, total_runs, wickets_lost, legal_balls, inn_id))
+            else:
+                inn_id = db_adapter.execute("""
+                    INSERT INTO innings (match_id, innings_number, batting_team_id, total_runs, wickets_lost, legal_balls)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (match_id, inn_idx, batting_team_id, total_runs, wickets_lost, legal_balls))
+
+            # Sync batters
+            for pos, b in enumerate(batters, start=1):
+                p_info = b.get("batsman") or {}
+                p_name = (p_info.get("name") or "").strip()
+                if not p_name:
+                    continue
+
+                p_row = db_adapter.query_one("SELECT player_id FROM players WHERE full_name = %s", (p_name,))
+                if not p_row:
+                    p_id = db_adapter.execute("""
+                        INSERT INTO players (full_name, nationality, role, is_active)
+                        VALUES (%s, %s, 'Batter', 1)
+                    """, (p_name, batting_nat))
+                else:
+                    p_id = p_row["player_id"]
+
+                # Link in match_players
+                mp = db_adapter.query_one(
+                    "SELECT match_player_id FROM match_players WHERE match_id = %s AND player_id = %s",
+                    (match_id, p_id)
+                )
+                if not mp:
+                    db_adapter.execute("""
+                        INSERT INTO match_players (match_id, player_id, team_id, playing_xi)
+                        VALUES (%s, %s, %s, 1)
+                    """, (match_id, p_id, batting_team_id))
+
+                # Insert/update batting_stats
+                runs = self._parse_int(b.get("r", 0))
+                balls = self._parse_int(b.get("b", 0))
+                fours = self._parse_int(b.get("4s", 0))
+                sixes = self._parse_int(b.get("6s", 0))
+                d_type = (b.get("dismissal") or "").strip()
+                is_out = 1 if (d_type and d_type.lower() != "not out") else 0
+                d_text = b.get("dismissal-text") or (d_type if is_out else "not out")
+
+                bs_row = db_adapter.query_one(
+                    "SELECT batting_stat_id FROM batting_stats WHERE innings_id = %s AND player_id = %s",
+                    (inn_id, p_id)
+                )
+                if bs_row:
+                    db_adapter.execute("""
+                        UPDATE batting_stats
+                        SET runs = %s, balls_faced = %s, fours = %s, sixes = %s, is_out = %s, dismissal_kind = %s, batting_position = %s
+                        WHERE batting_stat_id = %s
+                    """, (runs, balls, fours, sixes, is_out, d_text, pos, bs_row["batting_stat_id"]))
+                else:
+                    db_adapter.execute("""
+                        INSERT INTO batting_stats (innings_id, player_id, batting_position, runs, balls_faced, fours, sixes, is_out, dismissal_kind)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (inn_id, p_id, pos, runs, balls, fours, sixes, is_out, d_text))
+
+            # Sync bowlers
+            for bw in bowlers:
+                bw_info = bw.get("bowler") or {}
+                bw_name = (bw_info.get("name") or "").strip()
+                if not bw_name:
+                    continue
+
+                bw_p_row = db_adapter.query_one("SELECT player_id FROM players WHERE full_name = %s", (bw_name,))
+                if not bw_p_row:
+                    bw_p_id = db_adapter.execute("""
+                        INSERT INTO players (full_name, nationality, role, is_active)
+                        VALUES (%s, %s, 'Bowler', 1)
+                    """, (bw_name, bowling_nat))
+                else:
+                    bw_p_id = bw_p_row["player_id"]
+
+                # Link in match_players
+                mp = db_adapter.query_one(
+                    "SELECT match_player_id FROM match_players WHERE match_id = %s AND player_id = %s",
+                    (match_id, bw_p_id)
+                )
+                if not mp:
+                    db_adapter.execute("""
+                        INSERT INTO match_players (match_id, player_id, team_id, playing_xi)
+                        VALUES (%s, %s, %s, 1)
+                    """, (match_id, bw_p_id, bowling_team_id))
+
+                # Insert/update bowling_stats
+                legal_balls = self._parse_overs_to_balls(bw.get("o", 0))
+                maidens = self._parse_int(bw.get("m", 0))
+                runs_conceded = self._parse_int(bw.get("r", 0))
+                wickets = self._parse_int(bw.get("w", 0))
+
+                bw_stat_row = db_adapter.query_one(
+                    "SELECT bowling_stat_id FROM bowling_stats WHERE innings_id = %s AND player_id = %s",
+                    (inn_id, bw_p_id)
+                )
+                if bw_stat_row:
+                    db_adapter.execute("""
+                        UPDATE bowling_stats
+                        SET legal_balls = %s, maidens = %s, runs_conceded = %s, wickets = %s
+                        WHERE bowling_stat_id = %s
+                    """, (legal_balls, maidens, runs_conceded, wickets, bw_stat_row["bowling_stat_id"]))
+                else:
+                    db_adapter.execute("""
+                        INSERT INTO bowling_stats (innings_id, player_id, legal_balls, maidens, runs_conceded, wickets)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (inn_id, bw_p_id, legal_balls, maidens, runs_conceded, wickets))
+
     def import_live_match(self, match_data, db_adapter):
         """
         Imports or updates a live match from the live feed into the local database.
@@ -388,10 +676,10 @@ class CricketAPIClient:
         else:
             v_id = v_row["venue_id"]
 
-        # 4. Check if already recorded
+        # 4. Check if already recorded (match by title or title+date)
         existing_match = db_adapter.query_one(
-            "SELECT match_id FROM matches WHERE match_title = %s AND match_date = %s",
-            (title, match_date)
+            "SELECT match_id FROM matches WHERE match_title = %s",
+            (title,)
         )
         if existing_match:
             match_id = existing_match["match_id"]
@@ -400,8 +688,21 @@ class CricketAPIClient:
                 SET status = %s, result_summary = %s, winner_team_id = COALESCE(%s, winner_team_id)
                 WHERE match_id = %s
             """, (status, summary, winner_team_id, match_id))
-            self._sync_innings_score(match_id, 1, t2_id, team2_info, db_adapter)
-            self._sync_innings_score(match_id, 2, t1_id, team1_info, db_adapter)
+            
+            cric_id = match_data.get("id")
+            if cric_id and not str(cric_id).startswith("live_"):
+                sc_data = self.fetch_match_scorecard(cric_id)
+                if sc_data:
+                    self._sync_cricapi_scorecard_to_db(match_id, t1_id, t2_id, t1_name, t2_name, sc_data, db_adapter)
+                else:
+                    self._sync_innings_score(match_id, 1, t2_id, team2_info, db_adapter)
+                    self._sync_innings_score(match_id, 2, t1_id, team1_info, db_adapter)
+                    self._sync_live_players_and_stats(match_id, t1_id, t2_id, match_data, db_adapter)
+            else:
+                self._sync_innings_score(match_id, 1, t2_id, team2_info, db_adapter)
+                self._sync_innings_score(match_id, 2, t1_id, team1_info, db_adapter)
+                self._sync_live_players_and_stats(match_id, t1_id, t2_id, match_data, db_adapter)
+
             return {"match_id": match_id, "is_new": False}
 
         # 5. Insert new match
@@ -411,9 +712,20 @@ class CricketAPIClient:
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (title, fmt, match_date, v_id, t1_id, t2_id, overs_limit, status, winner_team_id, summary))
 
-        # 6. Sync innings
-        self._sync_innings_score(new_match_id, 1, t2_id, team2_info, db_adapter)
-        self._sync_innings_score(new_match_id, 2, t1_id, team1_info, db_adapter)
+        # 6. Sync innings & detailed scorecards
+        cric_id = match_data.get("id")
+        if cric_id and not str(cric_id).startswith("live_"):
+            sc_data = self.fetch_match_scorecard(cric_id)
+            if sc_data:
+                self._sync_cricapi_scorecard_to_db(new_match_id, t1_id, t2_id, t1_name, t2_name, sc_data, db_adapter)
+            else:
+                self._sync_innings_score(new_match_id, 1, t2_id, team2_info, db_adapter)
+                self._sync_innings_score(new_match_id, 2, t1_id, team1_info, db_adapter)
+                self._sync_live_players_and_stats(new_match_id, t1_id, t2_id, match_data, db_adapter)
+        else:
+            self._sync_innings_score(new_match_id, 1, t2_id, team2_info, db_adapter)
+            self._sync_innings_score(new_match_id, 2, t1_id, team1_info, db_adapter)
+            self._sync_live_players_and_stats(new_match_id, t1_id, t2_id, match_data, db_adapter)
 
         return {"match_id": new_match_id, "is_new": True}
 

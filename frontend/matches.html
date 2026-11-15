@@ -151,20 +151,39 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <div>
-                        <h4 class="modal-title fw-bold text-white mb-0" id="scorecardModalTitle">Match Scorecard</h4>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <h4 class="modal-title fw-bold text-white mb-0" id="scorecardModalTitle">Match Scorecard</h4>
+                            <span id="scorecardLiveBadge"></span>
+                        </div>
                         <div class="small text-muted" id="scorecardSubTitle"></div>
                     </div>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <div class="d-flex gap-2 align-items-center">
+                        <button class="btn btn-sm btn-outline-info" id="btnScorecardAddPlayer" onclick="openAddPlayerToMatchModalFromScorecard()">
+                            <i class="fas fa-user-plus me-1"></i> Add Player
+                        </button>
+                        <button class="btn btn-sm btn-outline-emerald" id="btnScorecardAddScore" onclick="openRecordScoreModalFromScorecard()">
+                            <i class="fas fa-plus me-1"></i> Record Score
+                        </button>
+                        <button type="button" class="btn-close btn-close-white ms-2" data-bs-dismiss="modal"></button>
+                    </div>
                 </div>
                 <div class="modal-body p-4">
+                    <!-- Match Result / Status Banner -->
                     <div class="alert alert-success bg-opacity-10 border border-success border-opacity-25 text-emerald fw-bold mb-4" id="scorecardResultBanner"></div>
 
-                    <h5 class="fw-bold text-white mb-3"><i class="fas fa-baseball-bat-ball text-warning me-2"></i>Batting Scorecard</h5>
+                    <!-- Innings Overview Section (Team Total Scores, Overs, Run Rates) -->
+                    <div id="scorecardInningsOverview" class="mb-4"></div>
+
+                    <!-- Batting Scorecard -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold text-white mb-0"><i class="fas fa-baseball-bat-ball text-warning me-2"></i>Batting Scorecard</h5>
+                    </div>
                     <div class="table-responsive mb-4">
                         <table class="table table-dark-custom">
                             <thead>
                                 <tr>
                                     <th>Batsman</th>
+                                    <th>Team</th>
                                     <th>Dismissal</th>
                                     <th>Runs</th>
                                     <th>Balls</th>
@@ -176,8 +195,11 @@
                         </table>
                     </div>
 
-                    <h5 class="fw-bold text-white mb-3"><i class="fas fa-volleyball text-danger me-2"></i>Bowling Scorecard</h5>
-                    <div class="table-responsive">
+                    <!-- Bowling Scorecard -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold text-white mb-0"><i class="fas fa-volleyball text-danger me-2"></i>Bowling Scorecard</h5>
+                    </div>
+                    <div class="table-responsive mb-4">
                         <table class="table table-dark-custom">
                             <thead>
                                 <tr>
@@ -192,7 +214,152 @@
                             <tbody id="scorecardBowlingBody"></tbody>
                         </table>
                     </div>
+
+                    <!-- Match Squad / Playing XI Section -->
+                    <div class="pt-3 border-top border-secondary border-opacity-25">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold text-white mb-0">
+                                <i class="fas fa-users text-info me-2"></i>Match Squads & Playing XI
+                            </h5>
+                            <button class="btn btn-sm btn-emerald" onclick="openAddPlayerToMatchModalFromScorecard()">
+                                <i class="fas fa-user-plus me-1"></i> Add Player to Match
+                            </button>
+                        </div>
+                        <div class="row g-3" id="scorecardSquadsContainer">
+                            <!-- Squad cards for Team 1 and Team 2 rendered by JavaScript -->
+                        </div>
+                    </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Player to Match Squad & Database -->
+    <div class="modal fade" id="addPlayerToMatchModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-white">
+                        <i class="fas fa-user-plus text-emerald me-2"></i>Add Player to Match Squad & Database
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="addPlayerToMatchForm">
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="addMatchPlayerMatchId">
+
+                        <!-- Select Match Team -->
+                        <div class="mb-3">
+                            <label class="form-label text-light fw-semibold">Select Match Team *</label>
+                            <select id="addMatchPlayerTeam" class="form-select" required></select>
+                        </div>
+
+                        <!-- Choose Existing Player vs Create New Player -->
+                        <div class="mb-3">
+                            <label class="form-label text-light fw-semibold">Player Source</label>
+                            <div class="d-flex gap-4 p-2 rounded bg-black bg-opacity-25 border border-secondary border-opacity-25">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="playerSourceType" id="srcExistingPlayer" value="existing" checked onchange="togglePlayerSourceMode()">
+                                    <label class="form-check-label text-white" for="srcExistingPlayer">
+                                        Choose from Existing Database Players
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="playerSourceType" id="srcNewPlayer" value="new" onchange="togglePlayerSourceMode()">
+                                    <label class="form-check-label text-white" for="srcNewPlayer">
+                                        Add New Player to Database
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Existing Player Selection Section -->
+                        <div id="sectionExistingPlayer" class="mb-3">
+                            <label class="form-label text-light fw-semibold">Select Player *</label>
+                            <select id="addMatchPlayerExisting" class="form-select"></select>
+                            <div class="form-text text-muted">Select an existing registered player in your database.</div>
+                        </div>
+
+                        <!-- New Player Form Section -->
+                        <div id="sectionNewPlayer" class="mb-3 d-none">
+                            <div class="p-3 rounded bg-secondary bg-opacity-10 border border-secondary border-opacity-25">
+                                <h6 class="text-emerald fw-bold mb-3"><i class="fas fa-id-card me-1"></i> New Player Profile</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Full Name *</label>
+                                        <input type="text" id="addMatchPlayerFullName" class="form-control" placeholder="e.g. Jasprit Bumrah">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Playing Role *</label>
+                                        <select id="addMatchPlayerRole" class="form-select">
+                                            <option value="Batter">Batter</option>
+                                            <option value="Bowler">Bowler</option>
+                                            <option value="All-rounder">All-rounder</option>
+                                            <option value="Wicketkeeper">Wicketkeeper</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Batting Style</label>
+                                        <select id="addMatchPlayerBattingStyle" class="form-select">
+                                            <option value="Right-hand bat">Right-hand bat</option>
+                                            <option value="Left-hand bat">Left-hand bat</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Bowling Style</label>
+                                        <select id="addMatchPlayerBowlingStyle" class="form-select">
+                                            <option value="Right-arm fast">Right-arm fast</option>
+                                            <option value="Right-arm medium">Right-arm medium</option>
+                                            <option value="Right-arm off break">Right-arm off break</option>
+                                            <option value="Right-arm leg break">Right-arm leg break</option>
+                                            <option value="Left-arm fast">Left-arm fast</option>
+                                            <option value="Left-arm orthodox">Left-arm orthodox</option>
+                                            <option value="None">None</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Nationality</label>
+                                        <input type="text" id="addMatchPlayerNationality" class="form-control" placeholder="Auto-fills from team">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Match Squad Role Checkboxes -->
+                        <div class="row g-3 mt-1">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="addMatchPlayerPlayingXi" checked>
+                                    <label class="form-check-label text-white" for="addMatchPlayerPlayingXi">
+                                        Playing XI (Starter)
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="addMatchPlayerCaptain">
+                                    <label class="form-check-label text-white" for="addMatchPlayerCaptain">
+                                        Team Captain (C)
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="addMatchPlayerWicketkeeper">
+                                    <label class="form-check-label text-white" for="addMatchPlayerWicketkeeper">
+                                        Wicketkeeper (WK)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-emerald" id="btnAddPlayerToMatchSubmit">
+                            <i class="fas fa-check me-1"></i> Add to Match Squad
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
