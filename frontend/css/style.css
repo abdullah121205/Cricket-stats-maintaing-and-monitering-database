@@ -73,6 +73,27 @@ body {
   overflow: hidden;
 }
 
+.kpi-card-compact {
+  padding: 1.15rem 1.1rem;
+}
+
+.kpi-card-compact .kpi-value {
+  font-size: 1.65rem;
+  margin-top: 0.2rem;
+}
+
+.kpi-card-compact .kpi-icon {
+  width: 38px;
+  height: 38px;
+  font-size: 1.1rem;
+  border-radius: 8px;
+}
+
+.kpi-card-compact .kpi-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
 .kpi-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
@@ -454,6 +475,23 @@ body {
   font-weight: 600;
   padding: 0.15rem 0.35rem;
   border-radius: 4px;
+}
+
+/* Wide Display Optimization */
+@media (min-width: 1200px) {
+  .container {
+    max-width: 95%;
+  }
+}
+
+@media (min-width: 1400px) {
+  .container {
+    max-width: 1560px;
+  }
+}
+
+.border-emerald-subtle {
+  border-color: rgba(16, 185, 129, 0.25) !important;
 }
 
 /* Footer */
